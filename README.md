@@ -49,3 +49,40 @@ cargo run --config "patch.crates-io.wry.path='C:/path/to/wry'"
 ```
 
 A fixed wry ends with `no crash`.
+
+## Where a different DLL lands
+
+Once wry registers its class under the DLL itself, a stale class is only
+found again by a module loaded at the address the first DLL had. If that
+module is a different build that embeds wry, its procedure sits at another
+offset, and the stale class sends the window's messages to whatever code is
+now at the old one.
+
+`dll_placement.py` checks whether Windows puts a different DLL at that
+address without anything forced. It loads and unloads one DLL, then loads a
+different one, and prints where each landed. It uses the DLLs that ship
+with Python, so it needs Python on Windows and nothing else:
+
+```text
+python -I dll_placement.py
+```
+
+Every different DLL with the same size in memory, counted in 64 KB blocks,
+landed at exactly the address the first one had left. DLLs of other sizes
+landed elsewhere. An excerpt, on Windows 11 x64 with ASLR on:
+
+```text
+A = _socket.pyd, 2 blocks
+
+B                          blocks       A loaded at       B loaded at  same?
+_zoneinfo.pyd                   1    0x7ff99f0d0000    0x7ff9a2570000
+_asyncio.pyd                    2    0x7ff99f0d0000    0x7ff99f0d0000  SAME
+_bz2.pyd                        2    0x7ff99f0d0000    0x7ff99f0d0000  SAME
+_testclinic.pyd                 2    0x7ff99f0d0000    0x7ff99f0d0000  SAME
+_testinternalcapi.pyd           2    0x7ff99f0d0000    0x7ff99f0d0000  SAME
+_ctypes.pyd                     3    0x7ff99f0d0000    0x7ff98faa0000
+```
+
+It shows where DLLs land, not a crash: none of these DLLs embeds wry. A
+plug-in rebuilt and loaded again into a host that is still running is the
+likely way a different build of the same size meets the old class.
